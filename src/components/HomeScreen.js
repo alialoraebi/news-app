@@ -13,41 +13,48 @@ const HomeScreen = () => {
   useEffect(() => {
     const fetchNews = async () => {
       let url = 'https://newsapi.org/v2/';
-      let params = `apiKey=${process.env.REACT_APP_API_KEY}&q=${search}`;
+      const params = new URLSearchParams({
+        apiKey: process.env.REACT_APP_API_KEY
+      });
   
+      // Only add search if it is non-empty
+      if (search) {
+        params.append('q', search);
+      }
+  
+      // Determine which endpoint and parameters to use
       if (category && !language) {
         url += 'top-headlines';
-        params += `&category=${category}`;
-      } else {
+        params.append('category', category);
+      } else if (!category && language) {
         url += 'everything';
-        if (language) {
-          params += `&language=${language}`;
-        }
+        params.append('language', language);
+      } else if (category && language) {
+        // Since 'top-headlines' does not support 'language', fallback to 'everything'
+        url += 'everything';
+        params.append('language', language);
+        params.append('category', category); // Note: The API does not actually support category here, consider removing
+      } else {
+        url += 'everything'; // Default to 'everything' if neither are selected
       }
+  
+      console.log(`Final API Request: ${url}?${params.toString()}`);
   
       try {
         const response = await fetch(`${url}?${params}`);
         if (!response.ok) {
-          if (response.status === 429) {
-            throw new Error('You have reached the maximum number of requests. Please try again later.');
-          } else {
-            throw new Error(`Failed to fetch news: ${response.status} ${response.statusText}`);
-          }
+          throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
         }
-        let json = await response.json();
-        if (category && language) {
-          json.articles = json.articles.filter(article => article.source.category === category);
-        }
-        setArticles(json.articles);
+        const jsonData = await response.json();
+        setArticles(jsonData.articles);
       } catch (error) {
         setError(error);
       }
     };
   
-    if (search) { 
-      fetchNews();
-    }
-  }, [search, category, language]); 
+    // Trigger fetch
+    fetchNews();
+  }, [search, category, language]); // Dependencies to trigger re-fetch
   
   if (error) {
     return <div>Error: {error.message}</div>;
@@ -64,14 +71,18 @@ const HomeScreen = () => {
         <option value="">Select language</option>
         {languages.map((lang, index) => <option key={index} value={lang}>{lang}</option>)}
       </select>
-      {articles.map((article, index) => (
+      {articles.length ? articles.map((article, index) => (
         <div key={index}>
           <h2>{article.title}</h2>
-          <img src={article.urlToImage} alt={article.title} />
+          <img 
+            src={article.urlToImage || 'default-image-url'} 
+            alt={article.title} 
+            onError={(e) => { e.target.onerror = null; e.target.src = 'fallback-image-url'; }}
+          />
           <p>{article.description}</p>
-          <a href={article.url} target="_blank" rel="noopener noreferrer">Read full article</a>
+          <a href={article.url} target="_blank" rel="noopener noreferrer">Read More</a>
         </div>
-      ))}
+      )) : <p>No articles found. Try adjusting your filters or refresh.</p>}
     </div>
   );
 };
