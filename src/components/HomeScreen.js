@@ -3,12 +3,29 @@ import React, { useState, useEffect } from 'react';
 const categories = ['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology'];
 const languages = ['ar', 'de', 'en', 'es', 'fr', 'he', 'it', 'nl', 'no', 'pt', 'ru', 'se', 'ud', 'zh'];
 
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 const HomeScreen = () => {
   const [articles, setArticles] = useState([]);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [language, setLanguage] = useState('');
+  const [language, setLanguage] = useState('en');
+  const debouncedSearch = useDebounce(search, 500); 
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -16,75 +33,117 @@ const HomeScreen = () => {
       const params = new URLSearchParams({
         apiKey: process.env.REACT_APP_API_KEY
       });
-  
-      // Only add search if it is non-empty
-      if (search) {
-        params.append('q', search);
-      }
-  
-      // Determine which endpoint and parameters to use
-      if (category && !language) {
+    
+      // If a category is selected, use the 'top-headlines' endpoint
+      if (category) {
         url += 'top-headlines';
         params.append('category', category);
-      } else if (!category && language) {
-        url += 'everything';
-        params.append('language', language);
-      } else if (category && language) {
-        // Since 'top-headlines' does not support 'language', fallback to 'everything'
-        url += 'everything';
-        params.append('language', language);
-        params.append('category', category); // Note: The API does not actually support category here, consider removing
-      } else {
-        url += 'everything'; // Default to 'everything' if neither are selected
-      }
-  
-      console.log(`Final API Request: ${url}?${params.toString()}`);
-  
-      try {
-        const response = await fetch(`${url}?${params}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+        if (language) {
+          params.append('language', language);
         }
-        const jsonData = await response.json();
-        setArticles(jsonData.articles);
+      } else {
+        // If no category is selected, use the 'everything' endpoint
+        url += 'everything';
+        if (language) {
+          params.append('language', language);
+        }
+        // Default to a general query if no specific search is provided
+        if (!debouncedSearch) {
+          params.append('q', 'latest'); // A default term to avoid errors
+        }
+      }
+    
+      if (debouncedSearch) {
+        params.append('q', debouncedSearch);
+      }
+    
+      url += '?' + params.toString();
+    
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const json = await response.json();
+        const validArticles = json.articles.filter(article => 
+          !(article.title && article.title.includes('[Removed]')) && 
+          !(article.description && article.description.includes('[Removed]'))
+        );
+        setArticles(validArticles);
       } catch (error) {
         setError(error);
       }
     };
-  
-    // Trigger fetch
-    fetchNews();
-  }, [search, category, language]); // Dependencies to trigger re-fetch
-  
+
+    if (debouncedSearch || category || language) {
+      fetchNews();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, category, language]); // React to changes in debouncedSearch, category, and language
+
   if (error) {
     return <div>Error: {error.message}</div>;
   }
 
   return (
-    <div>
-      <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search news..." />
-      <select value={category} onChange={e => setCategory(e.target.value)}>
-        <option value="">Select category</option>
-        {categories.map((cat, index) => <option key={index} value={cat}>{cat}</option>)}
-      </select>
-      <select value={language} onChange={e => setLanguage(e.target.value)}>
-        <option value="">Select language</option>
-        {languages.map((lang, index) => <option key={index} value={lang}>{lang}</option>)}
-      </select>
-      {articles.length ? articles.map((article, index) => (
-        <div key={index}>
-          <h2>{article.title}</h2>
-          <img 
-            src={article.urlToImage || 'default-image-url'} 
-            alt={article.title} 
-            onError={(e) => { e.target.onerror = null; e.target.src = 'fallback-image-url'; }}
-          />
-          <p>{article.description}</p>
-          <a href={article.url} target="_blank" rel="noopener noreferrer">Read More</a>
+    <div className="bg-white min-h-screen">
+      <div className="max-w-4xl mx-auto py-6">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search for news, topics, or sources"
+          className="w-full p-4 text-lg border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+        />
+        <div className="flex space-x-4 my-4">
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className="flex-1 p-4 text-lg border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select category</option>
+            {categories.map((cat, index) => (
+              <option key={index} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <select
+            value={language}
+            onChange={e => setLanguage(e.target.value)}
+            className="flex-1 p-4 text-lg border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select language</option>
+            {languages.map((lang, index) => (
+              <option key={index} value={lang}>{lang}</option>
+            ))}
+          </select>
         </div>
-      )) : <p>No articles found. Try adjusting your filters or refresh.</p>}
+        {articles.length ? (
+          <div className="space-y-4">
+            {articles.map((article, index) => (
+              <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                <img 
+                  src={article.urlToImage || 'https://via.placeholder.com/400x200'} 
+                  alt={article.title || 'Image unavailable'} 
+                  className="w-full h-48 object-cover"
+                  onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/400x200'; }}
+                />
+                <div className="p-4">
+                  <h2 className="font-semibold text-xl mb-2">{article.title}</h2>
+                  <p className="text-gray-700 text-base mb-4">{article.description || "No description available."}</p>
+                  <a href={article.url} target="_blank" rel="noopener noreferrer" className="inline-block bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors">
+                    Read More
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 text-lg">No articles found. Try adjusting your filters or refresh.</p>
+        )}
+      </div>
     </div>
   );
+  
 };
 
 export default HomeScreen;

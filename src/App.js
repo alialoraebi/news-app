@@ -1,4 +1,4 @@
-import './App.css';
+import './index.css';
 import HomeScreenComponent from './components/HomeScreen';
 
 function App() {
