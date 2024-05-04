@@ -58,7 +58,7 @@ const HomeScreen = () => {
     const fetchNews = async () => {
       let url = 'https://newsapi.org/v2/';
       const params = new URLSearchParams({
-        apiKey: process.env.REACT_APP_API_KEY,
+        apiKey: '46d5f5726e7d4e3caaba78cde82720e4',
         pageSize: 10,
         page: page
       });
